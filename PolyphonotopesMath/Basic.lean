@@ -267,4 +267,182 @@ theorem C_Fs_symmetric : isSymmetric tritone C_Fs := by
   -- This follows by commutativity of xor
   exact xor_comm _ _
 
+/-- The whole-tone scale starting on F -/
+def F_wholetone : PitchClassSet :=
+  fromList [PitchClass.F, PitchClass.G, PitchClass.A, PitchClass.B, PitchClass.Cs, PitchClass.Ds]
+
+/-- A whole step interval -/
+def wholestep : PitchClass := 2
+
+/-- The whole-tone scale is symmetric under transposition by a whole step -/
+theorem F_wholetone_wholestep_symmetric : isSymmetric wholestep F_wholetone := by
+  simp only [isSymmetric, wholestep, F_wholetone]
+  funext i
+  simp only [transpose, fromList]
+  -- The whole-tone scale contains exactly the even pitch classes (0,2,4,6,8,10)
+  -- Subtracting 2 from any even number gives another even number (mod 12)
+  fin_cases i <;> rfl
+
+/-- The diatonic scale (F Lydian / C major) -/
+def diatonic : PitchClassSet :=
+  fromList [PitchClass.F, PitchClass.G, PitchClass.A, PitchClass.B,
+            PitchClass.C, PitchClass.D, PitchClass.E]
+
+/-- The mask that transforms whole-tone to diatonic -/
+def wholetone_diatonic_mask : PitchClassSet :=
+  fromList [PitchClass.C, PitchClass.Cs, PitchClass.D, PitchClass.Ds, PitchClass.E]
+  -- {7, 8, 9, 10, 11} in our numbering
+
+/-- The diatonic scale is the whole-tone scale XOR'd with the mask -/
+theorem diatonic_eq_wholetone_xor_mask :
+    diatonic = xor wholetone_diatonic_mask F_wholetone := by
+  simp only [diatonic, F_wholetone, wholetone_diatonic_mask, fromList, xor]
+  funext i
+  fin_cases i <;> rfl
+
+/-!
+## Mask-Transposition Interaction
+
+Key insight: XOR masks and transposition interact via conjugation.
+If we want to transform a transposed set, we can either:
+1. Transpose first, then apply mask
+2. Apply a transposed mask, then transpose
+
+This is because transposition distributes over XOR.
+-/
+
+/-- Transposing then masking = masking with transposed mask then transposing -/
+theorem mask_transpose_conjugate (mask : PitchClassSet) (k : PitchClass) (s : PitchClassSet) :
+    xor mask (transpose k s) = transpose k (xor (transpose (-k) mask) s) := by
+  rw [transpose_xor]
+  congr 1
+  -- Need: mask = transpose k (transpose (-k) mask)
+  rw [transpose_add, add_neg_cancel, transpose_zero]
+
+/-- The mask to get from wholetone to a transposed diatonic -/
+def diatonic_mask_for_transposition (k : PitchClass) : PitchClassSet :=
+  transpose k wholetone_diatonic_mask
+
+/-!
+## The Two Whole-Tone Scales
+
+There are exactly two whole-tone scales (related by transposition by 1).
+Every diatonic scale can be expressed as XOR of one of these with an appropriate mask.
+-/
+
+/-- The other whole-tone scale (starting on F#) -/
+def Fs_wholetone : PitchClassSet :=
+  fromList [PitchClass.Fs, PitchClass.Gs, PitchClass.As, PitchClass.C, PitchClass.D, PitchClass.E]
+
+/-- Transposing wholetone by any even amount returns wholetone (direct check) -/
+theorem transpose_wholetone_0 : transpose 0 F_wholetone = F_wholetone := transpose_zero _
+theorem transpose_wholetone_2 : transpose 2 F_wholetone = F_wholetone := by
+  simp only [F_wholetone, fromList, transpose]; funext i; fin_cases i <;> rfl
+theorem transpose_wholetone_4 : transpose 4 F_wholetone = F_wholetone := by
+  simp only [F_wholetone, fromList, transpose]; funext i; fin_cases i <;> rfl
+theorem transpose_wholetone_6 : transpose 6 F_wholetone = F_wholetone := by
+  simp only [F_wholetone, fromList, transpose]; funext i; fin_cases i <;> rfl
+theorem transpose_wholetone_8 : transpose 8 F_wholetone = F_wholetone := by
+  simp only [F_wholetone, fromList, transpose]; funext i; fin_cases i <;> rfl
+theorem transpose_wholetone_10 : transpose 10 F_wholetone = F_wholetone := by
+  simp only [F_wholetone, fromList, transpose]; funext i; fin_cases i <;> rfl
+
+/-- Transposing wholetone by 1 gives Fs_wholetone -/
+theorem transpose_wholetone_1 : transpose 1 F_wholetone = Fs_wholetone := by
+  simp only [F_wholetone, Fs_wholetone, fromList, transpose]; funext i; fin_cases i <;> rfl
+
+theorem Fs_wholetone_eq_transpose : Fs_wholetone = transpose 1 F_wholetone := by
+  simp only [Fs_wholetone, F_wholetone, fromList, transpose]
+  funext i
+  fin_cases i <;> rfl
+
+/-- The two whole-tone scales partition the chromatic scale -/
+theorem wholetone_partition : xor F_wholetone Fs_wholetone = universal := by
+  simp only [F_wholetone, Fs_wholetone, fromList]
+  funext i
+  fin_cases i <;> rfl
+
+/-!
+## Characterizing the Mask
+
+The wholetone-diatonic mask {7,8,9,10,11} has special structure:
+- It's a contiguous chromatic cluster of 5 notes
+- It's the complement of {0,1,2,3,4,5,6} which is... 7 notes!
+- Wait, that's not quite right. Let's compute the complement.
+-/
+
+/-- Complement of a PCS -/
+def complement (s : PitchClassSet) : PitchClassSet := xor s universal
+
+theorem complement_involutive : Function.Involutive complement := by
+  intro s
+  simp only [complement]
+  rw [xor_assoc, xor_self, xor_empty_right]
+
+/-- The mask's complement -/
+def wholetone_diatonic_mask_complement : PitchClassSet :=
+  complement wholetone_diatonic_mask
+
+theorem mask_complement_is_7_notes :
+    wholetone_diatonic_mask_complement =
+    fromList [PitchClass.F, PitchClass.Fs, PitchClass.G, PitchClass.Gs,
+              PitchClass.A, PitchClass.As, PitchClass.B] := by
+  simp only [wholetone_diatonic_mask_complement, complement, wholetone_diatonic_mask]
+  funext i
+  fin_cases i <;> rfl
+
+/-!
+## Complement Mask and the Other Whole-Tone Scale
+
+The complement mask applied to F_wholetone gives pentatonic (5 notes).
+But applied to Fs_wholetone (the other whole-tone), it gives diatonic!
+
+This reveals a beautiful symmetry: each whole-tone scale pairs with one of
+the two masks (original or complement) to produce diatonic.
+-/
+
+/-- The pentatonic scale (complement of diatonic) -/
+def pentatonic : PitchClassSet :=
+  fromList [PitchClass.Fs, PitchClass.Gs, PitchClass.As, PitchClass.Cs, PitchClass.Ds]
+
+theorem pentatonic_eq_diatonic_complement : pentatonic = complement diatonic := by
+  simp only [pentatonic, diatonic, complement, fromList]
+  funext i
+  fin_cases i <;> rfl
+
+/-- Complement mask on F_wholetone gives pentatonic -/
+theorem complement_mask_F_wholetone_eq_pentatonic :
+    xor wholetone_diatonic_mask_complement F_wholetone = pentatonic := by
+  simp only [wholetone_diatonic_mask_complement, complement, wholetone_diatonic_mask,
+             F_wholetone, pentatonic, fromList]
+  funext i
+  fin_cases i <;> rfl
+
+/-- Complement mask on Fs_wholetone gives diatonic! -/
+theorem complement_mask_Fs_wholetone_eq_diatonic :
+    xor wholetone_diatonic_mask_complement Fs_wholetone = diatonic := by
+  simp only [wholetone_diatonic_mask_complement, complement, wholetone_diatonic_mask,
+             Fs_wholetone, diatonic, fromList]
+  funext i
+  fin_cases i <;> rfl
+
+/-- Original mask on Fs_wholetone gives pentatonic -/
+theorem mask_Fs_wholetone_eq_pentatonic :
+    xor wholetone_diatonic_mask Fs_wholetone = pentatonic := by
+  simp only [wholetone_diatonic_mask, Fs_wholetone, pentatonic, fromList]
+  funext i
+  fin_cases i <;> rfl
+
+/-!
+Summary of the 2x2 structure:
+
+                    | F_wholetone (evens)  | Fs_wholetone (odds)
+--------------------|----------------------|---------------------
+mask {7,8,9,10,11}  | diatonic             | pentatonic
+mask {0,1,2,3,4,5,6}| pentatonic           | diatonic
+
+The two whole-tone scales and two complementary masks give exactly
+{diatonic, pentatonic} in a symmetric pattern!
+-/
+
 end PitchClassSet
