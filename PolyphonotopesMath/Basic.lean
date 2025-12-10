@@ -26,18 +26,18 @@ def PitchClassSet := PitchClass → ZMod 2
 namespace PitchClass
 
 -- Named pitch classes for convenience
-def C  : PitchClass := 0
-def Cs : PitchClass := 1   -- C#/Db
-def D  : PitchClass := 2
-def Ds : PitchClass := 3   -- D#/Eb
-def E  : PitchClass := 4
-def F  : PitchClass := 5
-def Fs : PitchClass := 6   -- F#/Gb
-def G  : PitchClass := 7
-def Gs : PitchClass := 8   -- G#/Ab
-def A  : PitchClass := 9
-def As : PitchClass := 10  -- A#/Bb
-def B  : PitchClass := 11
+def F  : PitchClass := 0
+def Fs : PitchClass := 1   -- F#/Gb
+def G  : PitchClass := 2
+def Gs : PitchClass := 3   -- G#/Ab
+def A  : PitchClass := 4
+def As : PitchClass := 5   -- A#/Bb
+def B  : PitchClass := 6
+def C  : PitchClass := 7
+def Cs : PitchClass := 8   -- C#/Db
+def D  : PitchClass := 9
+def Ds : PitchClass := 10  -- D#/Eb
+def E  : PitchClass := 11
 
 /-!
 ## Fin 12 ↔ ZMod 12 Interface
@@ -206,5 +206,65 @@ theorem transpose_singleton (k : PitchClass) (pc : PitchClass) :
       rw [h2]
       ring
     · simp [h2]
+
+/-!
+## Transpose-XOR Equivalence
+
+For any PCS s and transposition k, there exists a unique mask m such that
+`transpose k s = xor m s`. This mask is the symmetric difference `xor s (transpose k s)`.
+
+This shows that transposition can always be "simulated" by XOR with the right mask,
+though the mask depends on the input PCS.
+-/
+
+/-- The mask that transforms s into (transpose k s) via XOR -/
+def transposeAsMask (k : PitchClass) (s : PitchClassSet) : PitchClassSet :=
+  xor s (transpose k s)
+
+/-- Transposition equals XOR with the transpose-as-mask -/
+theorem transpose_eq_xor_mask (k : PitchClass) (s : PitchClassSet) :
+    transpose k s = xor (transposeAsMask k s) s := by
+  simp only [transposeAsMask]
+  rw [xor_comm, ← xor_assoc, xor_self, xor_empty_left]
+
+/-- The mask is unique: if transpose k s = xor m s, then m = transposeAsMask k s -/
+theorem transposeAsMask_unique (k : PitchClass) (s : PitchClassSet) (m : PitchClassSet)
+    (h : transpose k s = xor m s) : m = transposeAsMask k s := by
+  simp only [transposeAsMask]
+  -- xor both sides with s
+  have : xor (transpose k s) s = xor (xor m s) s := by rw [h]
+  rw [xor_assoc, xor_self, xor_empty_right] at this
+  rw [xor_comm, this]
+
+/-!
+## Fixed Points and Symmetry
+
+A PCS is k-symmetric if transposing by k gives the same set.
+For such sets, the transposeAsMask is empty.
+-/
+
+/-- A PCS is k-symmetric if transpose k s = s -/
+def isSymmetric (k : PitchClass) (s : PitchClassSet) : Prop :=
+  transpose k s = s
+
+/-- For k-symmetric sets, transposition by k equals identity (xor with empty) -/
+theorem symmetric_mask_empty (k : PitchClass) (s : PitchClassSet) (h : isSymmetric k s) :
+    transposeAsMask k s = empty := by
+  simp only [transposeAsMask, isSymmetric] at *
+  rw [h, xor_self]
+
+/-- Tritone: the interval of 6 semitones -/
+def tritone : PitchClass := 6
+
+/-- Example: {C, F#} is tritone-symmetric -/
+def C_Fs : PitchClassSet := xor (singleton PitchClass.C) (singleton PitchClass.Fs)
+
+theorem C_Fs_symmetric : isSymmetric tritone C_Fs := by
+  simp only [isSymmetric, tritone, C_Fs]
+  rw [transpose_xor, transpose_singleton, transpose_singleton]
+  simp only [PitchClass.C, PitchClass.Fs]
+  -- After transposition: singleton 6 xor singleton 0 = singleton 0 xor singleton 6
+  -- This follows by commutativity of xor
+  exact xor_comm _ _
 
 end PitchClassSet
