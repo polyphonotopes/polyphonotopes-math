@@ -7,58 +7,86 @@ import Mathlib.Tactic
 /-!
 # Pitch Class Sets and XOR Transformations
 
-We formalize pitch class sets as 12-dimensional vectors over Z₂,
-where XOR provides both the group operation and the transformation action.
+We formalize pitch class sets as functions from the cyclic group Z₁₂ to Z₂.
 
 ## Key structures:
-- `PitchClassSet`: 12-bit representation of pitch classes
-- XOR as group operation makes this (Z₂)^12
-- Each PCS acts as a transformation via XOR (regular representation)
+- `PitchClass`: Elements of Z₁₂ (the 12 pitch classes)
+- `PitchClassSet`: Functions Z₁₂ → Z₂ (characteristic functions)
+- XOR operates on the codomain (Z₂) - toggles membership
+- Transposition operates on the domain (Z₁₂) - shifts pitches
 -/
 
-/-- A pitch class set is a function from the 12 pitch classes to Z₂.
-    Equivalently, a 12-dimensional vector over the field with 2 elements. -/
-def PitchClassSet := Fin 12 → ZMod 2
+/-- A pitch class is an element of Z/12Z. -/
+abbrev PitchClass := ZMod 12
+
+/-- A pitch class set is a function from pitch classes to Z₂.
+    This is the characteristic function representation. -/
+def PitchClassSet := PitchClass → ZMod 2
+
+namespace PitchClass
+
+-- Named pitch classes for convenience
+def C  : PitchClass := 0
+def Cs : PitchClass := 1   -- C#/Db
+def D  : PitchClass := 2
+def Ds : PitchClass := 3   -- D#/Eb
+def E  : PitchClass := 4
+def F  : PitchClass := 5
+def Fs : PitchClass := 6   -- F#/Gb
+def G  : PitchClass := 7
+def Gs : PitchClass := 8   -- G#/Ab
+def A  : PitchClass := 9
+def As : PitchClass := 10  -- A#/Bb
+def B  : PitchClass := 11
+
+/-!
+## Fin 12 ↔ ZMod 12 Interface
+
+Mathlib provides natural conversions between Fin n and ZMod n.
+We can use the coercion `(i : Fin 12) → (i : ZMod 12)` directly.
+-/
+
+/-- Convert from Fin 12 to PitchClass (ZMod 12) -/
+def ofFin (i : Fin 12) : PitchClass := i
+
+/-- Convert from PitchClass to Fin 12 -/
+def toFin (pc : PitchClass) : Fin 12 := ⟨pc.val, pc.val_lt⟩
+
+end PitchClass
 
 namespace PitchClassSet
 
 /-- The empty pitch class set (no pitches). Identity for XOR. -/
 def empty : PitchClassSet := fun _ => 0
 
+/-- The universal set (all pitches). -/
+def universal : PitchClassSet := fun _ => 1
+
 /-- XOR of two pitch class sets (pointwise addition in Z₂). -/
 def xor (a b : PitchClassSet) : PitchClassSet := fun i => a i + b i
 
 /-- A singleton pitch class set containing just one pitch. -/
-def singleton (pc : Fin 12) : PitchClassSet := fun i => if i = pc then 1 else 0
-
--- Notation for common pitch classes
-def C  : Fin 12 := 0
-def Cs : Fin 12 := 1   -- C#
-def D  : Fin 12 := 2
-def Ds : Fin 12 := 3   -- D#
-def E  : Fin 12 := 4
-def F  : Fin 12 := 5
-def Fs : Fin 12 := 6   -- F#
-def G  : Fin 12 := 7
-def Gs : Fin 12 := 8   -- G#
-def A  : Fin 12 := 9
-def As : Fin 12 := 10  -- A#
-def B  : Fin 12 := 11
+def singleton (pc : PitchClass) : PitchClassSet := fun i => if i = pc then 1 else 0
 
 /-- Build a PCS from a list of pitch classes -/
-def fromList (pcs : List (Fin 12)) : PitchClassSet :=
+def fromList (pcs : List PitchClass) : PitchClassSet :=
   fun i => if pcs.contains i then 1 else 0
 
--- Example: F and F# as a transformation mask
-def F_Fs_mask : PitchClassSet := fromList [F, Fs]
+/-- Check membership -/
+def mem (pc : PitchClass) (pcs : PitchClassSet) : Prop := pcs pc = 1
+
+-- Note: `pc ∈ pcs` means `mem pc pcs`
+-- Membership α β has `mem : β → α → Prop` (container first, element second)
+instance : Membership PitchClass PitchClassSet where
+  mem := fun (pcs : PitchClassSet) (pc : PitchClass) => pcs pc = 1
 
 /-!
-## Group Structure
+## XOR Group Structure
 
 PitchClassSet forms an abelian group under XOR:
 - Identity: empty set
 - Inverse: each element is its own inverse (a ⊕ a = ∅)
-- Associativity: inherited from Z₂
+- This is (Z₂)^12
 -/
 
 instance : Add PitchClassSet where
@@ -93,7 +121,6 @@ theorem xor_empty_left (a : PitchClassSet) : xor empty a = a := by
 theorem xor_self (a : PitchClassSet) : xor a a = empty := by
   funext i
   simp only [xor, empty]
-  -- In ZMod 2, x + x = 0 for all x
   have h : a i + a i = 0 := by
     have : (2 : ZMod 2) = 0 := rfl
     calc a i + a i = 2 * a i := by ring
@@ -102,13 +129,39 @@ theorem xor_self (a : PitchClassSet) : xor a a = empty := by
   exact h
 
 /-!
-## Group Action (Regular Representation)
+## Transposition (Domain Action)
 
-Each PitchClassSet acts on the set of all PitchClassSets via XOR.
-This is the regular representation: the group acting on itself.
+Transposition acts on the domain Z₁₂. Transposing by k shifts all pitches up by k.
+This is the regular action of Z₁₂ on itself.
 -/
 
-/-- Apply a PCS as a transformation to another PCS -/
+/-- Transpose a pitch class set by k semitones.
+    If C was in the set, now C+k is in the set. -/
+def transpose (k : PitchClass) (pcs : PitchClassSet) : PitchClassSet :=
+  fun i => pcs (i - k)
+
+theorem transpose_zero (pcs : PitchClassSet) : transpose 0 pcs = pcs := by
+  funext i
+  simp [transpose]
+
+theorem transpose_add (j k : PitchClass) (pcs : PitchClassSet) :
+    transpose j (transpose k pcs) = transpose (j + k) pcs := by
+  funext i
+  simp only [transpose]
+  ring_nf
+
+theorem transpose_neg (k : PitchClass) (pcs : PitchClassSet) :
+    transpose (-k) (transpose k pcs) = pcs := by
+  rw [transpose_add, neg_add_cancel, transpose_zero]
+
+/-!
+## XOR Transform (Codomain Action)
+
+Each PitchClassSet acts as a transformation via XOR.
+This toggles membership of specific pitch classes.
+-/
+
+/-- Apply a PCS as a transformation mask to another PCS -/
 def transform (mask : PitchClassSet) (pcs : PitchClassSet) : PitchClassSet :=
   xor mask pcs
 
@@ -124,5 +177,34 @@ theorem transform_compose (m₁ m₂ pcs : PitchClassSet) :
     transform m₁ (transform m₂ pcs) = transform (xor m₁ m₂) pcs := by
   simp only [transform]
   rw [← xor_assoc]
+
+/-!
+## Interaction: XOR and Transposition
+
+These two operations interact nicely - transposition distributes over XOR.
+-/
+
+theorem transpose_xor (k : PitchClass) (a b : PitchClassSet) :
+    transpose k (xor a b) = xor (transpose k a) (transpose k b) := by
+  funext i
+  simp [transpose, xor]
+
+theorem transpose_empty (k : PitchClass) : transpose k empty = empty := by
+  funext i
+  simp [transpose, empty]
+
+theorem transpose_singleton (k : PitchClass) (pc : PitchClass) :
+    transpose k (singleton pc) = singleton (pc + k) := by
+  funext i
+  simp only [transpose, singleton]
+  by_cases h : i - k = pc
+  · simp [sub_eq_iff_eq_add.mp h]
+  · simp only [h, ↓reduceIte]
+    by_cases h2 : i = pc + k
+    · exfalso
+      apply h
+      rw [h2]
+      ring
+    · simp [h2]
 
 end PitchClassSet
