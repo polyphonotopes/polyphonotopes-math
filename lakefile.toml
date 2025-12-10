@@ -1,0 +1,15 @@
+name = "polyphonotopes-math"
+version = "0.1.0"
+defaultTargets = ["polyphonotopes-math"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "master"
+
+[[lean_lib]]
+name = "PolyphonotopesMath"
+
+[[lean_exe]]
+name = "polyphonotopes-math"
+root = "Main"
