@@ -72,6 +72,15 @@ def singleton (pc : PitchClass) : PitchClassSet := fun i => if i = pc then 1 els
 def fromList (pcs : List PitchClass) : PitchClassSet :=
   fun i => if pcs.contains i then 1 else 0
 
+/-- Build a PCS from a 12-bit integer (bitset representation).
+    Bit i is set iff pitch class i is in the set. -/
+def fromBits (bits : Nat) : PitchClassSet :=
+  fun i => if (bits >>> i.val) &&& 1 = 1 then 1 else 0
+
+/-- Convert a PCS to a 12-bit integer -/
+def toBits (pcs : PitchClassSet) : Nat :=
+  (List.finRange 12).foldl (fun acc i => acc ||| (if pcs i = 1 then 1 <<< i.val else 0)) 0
+
 /-- Check membership -/
 def mem (pc : PitchClass) (pcs : PitchClassSet) : Prop := pcs pc = 1
 
@@ -445,4 +454,216 @@ The two whole-tone scales and two complementary masks give exactly
 {diatonic, pentatonic} in a symmetric pattern!
 -/
 
+/-!
+## Cardinality
+
+We can count the number of pitch classes in a PCS.
+XOR affects cardinality based on overlap with the mask.
+-/
+
+/-- Count the number of pitch classes in a PCS -/
+def card (s : PitchClassSet) : ℕ :=
+  (List.filter (fun i => s i = 1) (List.finRange 12)).length
+
+theorem card_empty : card empty = 0 := rfl
+theorem card_universal : card universal = 12 := rfl
+theorem card_singleton_C : card (singleton PitchClass.C) = 1 := rfl
+
+theorem card_F_wholetone : card F_wholetone = 6 := rfl
+theorem card_Fs_wholetone : card Fs_wholetone = 6 := rfl
+theorem card_diatonic : card diatonic = 7 := rfl
+theorem card_pentatonic : card pentatonic = 5 := rfl
+theorem card_wholetone_diatonic_mask : card wholetone_diatonic_mask = 5 := rfl
+theorem card_wholetone_diatonic_mask_complement : card wholetone_diatonic_mask_complement = 7 := rfl
+
+/-!
+## Cardinality Change Under XOR
+
+When XORing s with mask m:
+- Notes in (m ∩ s) are removed
+- Notes in (m \ s) are added
+- Net change = |m| - 2|m ∩ s|
+
+For wholetone (6 notes):
+- mask {7,8,9,10,11} (5 notes) overlaps at {8,10} (2 notes): 6 + 5 - 2*2 = 7 ✓
+- mask {0,1,2,3,4,5,6} (7 notes) overlaps at {0,2,4,6} (4 notes): 6 + 7 - 2*4 = 5 ✓
+-/
+
+/-- Intersection of two PCS (pointwise AND, i.e., multiplication in Z₂) -/
+def inter (a b : PitchClassSet) : PitchClassSet := fun i => a i * b i
+
+/-- The diatonic mask overlaps wholetone at exactly 2 notes -/
+theorem diatonic_mask_overlap : card (inter wholetone_diatonic_mask F_wholetone) = 2 := rfl
+
+/-- Verify the cardinality formula for diatonic case: 6 + 5 - 2*2 = 7 -/
+theorem card_xor_diatonic_example :
+    card (xor wholetone_diatonic_mask F_wholetone) =
+    card F_wholetone + card wholetone_diatonic_mask - 2 * card (inter wholetone_diatonic_mask F_wholetone) := rfl
+
 end PitchClassSet
+
+/-!
+## Standard Scales (C = 0 convention)
+
+Scale data derived from tonal.js: https://github.com/tonaljs/tonal
+
+Note: These use standard music theory convention where C = 0.
+Our PitchClass namespace uses F = 0 for circle-of-fifths alignment.
+To convert: add 7 (mod 12) to go from C=0 to F=0.
+-/
+
+namespace StandardScales
+
+open PitchClassSet
+
+/-- major pentatonic: {0, 2, 4, 7, 9} -/
+def major_pentatonic : PitchClassSet := fromBits 0b001010010101
+
+/-- major (ionian): {0, 2, 4, 5, 7, 9, 11} -/
+def major : PitchClassSet := fromBits 0b101010110101
+
+/-- minor (aeolian): {0, 2, 3, 5, 7, 8, 10} -/
+def minor : PitchClassSet := fromBits 0b010110101101
+
+/-- melodic minor: {0, 2, 3, 5, 7, 9, 11} -/
+def melodic_minor : PitchClassSet := fromBits 0b101010101101
+
+/-- harmonic minor: {0, 2, 3, 5, 7, 8, 11} -/
+def harmonic_minor : PitchClassSet := fromBits 0b100110101101
+
+/-- dorian: {0, 2, 3, 5, 7, 9, 10} -/
+def dorian : PitchClassSet := fromBits 0b011010101101
+
+/-- phrygian: {0, 1, 3, 5, 7, 8, 10} -/
+def phrygian : PitchClassSet := fromBits 0b010110101011
+
+/-- lydian: {0, 2, 4, 6, 7, 9, 11} -/
+def lydian : PitchClassSet := fromBits 0b101011010101
+
+/-- mixolydian: {0, 2, 4, 5, 7, 9, 10} -/
+def mixolydian : PitchClassSet := fromBits 0b011010110101
+
+/-- locrian: {0, 1, 3, 5, 6, 8, 10} -/
+def locrian : PitchClassSet := fromBits 0b010101101011
+
+/-- minor pentatonic: {0, 3, 5, 7, 10} -/
+def minor_pentatonic : PitchClassSet := fromBits 0b010010101001
+
+/-- whole tone: {0, 2, 4, 6, 8, 10} -/
+def whole_tone : PitchClassSet := fromBits 0b010101010101
+
+/-- half-whole diminished (octatonic): {0, 1, 3, 4, 6, 7, 9, 10} -/
+def half_whole_diminished : PitchClassSet := fromBits 0b011011011011
+
+/-- whole-half diminished (octatonic): {0, 2, 3, 5, 6, 8, 9, 11} -/
+def whole_half_diminished : PitchClassSet := fromBits 0b101101101101
+
+/-- blues: {0, 3, 5, 6, 7, 10} -/
+def blues : PitchClassSet := fromBits 0b010011101001
+
+/-- bebop dominant: {0, 2, 4, 5, 7, 9, 10, 11} -/
+def bebop : PitchClassSet := fromBits 0b111010110101
+
+/-- augmented (hexatonic): {0, 3, 4, 7, 8, 11} -/
+def augmented_scale : PitchClassSet := fromBits 0b100110011001
+
+/-- lydian dominant: {0, 2, 4, 6, 7, 9, 10} -/
+def lydian_dominant : PitchClassSet := fromBits 0b011011010101
+
+/-- phrygian dominant (Spanish): {0, 1, 4, 5, 7, 8, 10} -/
+def phrygian_dominant : PitchClassSet := fromBits 0b010110110011
+
+/-- double harmonic (Byzantine): {0, 1, 4, 5, 7, 8, 11} -/
+def double_harmonic : PitchClassSet := fromBits 0b100110110011
+
+/-- hungarian minor: {0, 2, 3, 6, 7, 8, 11} -/
+def hungarian_minor : PitchClassSet := fromBits 0b100111001101
+
+-- Symmetric scales
+/-- chromatic: all 12 pitch classes -/
+def chromatic : PitchClassSet := fromBits 0b111111111111
+
+/-- diminished 7th chord: {0, 3, 6, 9} -/
+def dim7 : PitchClassSet := fromBits 0b001001001001
+
+/-- augmented triad: {0, 4, 8} -/
+def aug : PitchClassSet := fromBits 0b000100010001
+
+/-- tritone: {0, 6} -/
+def tritone : PitchClassSet := fromBits 0b000001000001
+
+end StandardScales
+
+/-!
+## Enriched Groupoid Structure
+
+For any subset S ⊆ PCS, we get a groupoid enriched over (PCS, ⊕, ∅):
+- Objects: elements of S
+- Hom(A, B) = A ⊕ B (the diff)
+- Composition: ⊕
+- Identity: ∅
+
+This gives us a way to study structure-preserving operations within S.
+-/
+
+namespace EnrichedGroupoid
+
+open PitchClassSet
+
+/-- The diff (symmetric difference) between two PCS -/
+def diff (A B : PitchClassSet) : PitchClassSet := xor A B
+
+/-- Diff is symmetric -/
+theorem diff_comm (A B : PitchClassSet) : diff A B = diff B A := xor_comm A B
+
+/-- Diff with self is empty -/
+theorem diff_self (A : PitchClassSet) : diff A A = empty := xor_self A
+
+/-- Composition of diffs -/
+theorem diff_comp (A B C : PitchClassSet) :
+    xor (diff A B) (diff B C) = diff A C := by
+  simp only [diff, PitchClassSet.xor]
+  funext i
+  -- In Z₂: (A + B) + (B + C) = A + C because B + B = 0
+  have h : B i + B i = 0 := by
+    have : (2 : ZMod 2) = 0 := rfl
+    calc B i + B i = 2 * B i := by ring
+      _ = 0 * B i := by rw [this]
+      _ = 0 := by ring
+  calc A i + B i + (B i + C i) = A i + (B i + B i) + C i := by ring
+    _ = A i + 0 + C i := by rw [h]
+    _ = A i + C i := by ring
+
+/-- Hom(A, -): all diffs from A to elements of S -/
+def Hom (S : Set PitchClassSet) (A : PitchClassSet) : Set PitchClassSet :=
+  { diff A B | B ∈ S }
+
+/-- Diffs: all diffs between elements of S -/
+def Diffs (S : Set PitchClassSet) : Set PitchClassSet :=
+  { diff A B | (A ∈ S) (B ∈ S) }
+
+/-- Stab: diffs that work from every element of S (stabilizers) -/
+def Stab (S : Set PitchClassSet) : Set PitchClassSet :=
+  { m | ∀ A ∈ S, xor A m ∈ S }
+
+/-- Empty is always in Stab -/
+theorem empty_mem_Stab (S : Set PitchClassSet) : empty ∈ Stab S := by
+  intro A hA
+  rw [xor_empty_right]
+  exact hA
+
+/-- Stab is closed under xor -/
+theorem Stab_closed_xor (S : Set PitchClassSet) (m n : PitchClassSet)
+    (hm : m ∈ Stab S) (hn : n ∈ Stab S) : xor m n ∈ Stab S := by
+  intro A hA
+  rw [← xor_assoc]
+  exact hn (xor A m) (hm A hA)
+
+/-- The orbit of a PCS under transposition -/
+def TransposeOrbit (A : PitchClassSet) : Set PitchClassSet :=
+  { transpose k A | k : PitchClass }
+
+/-- Major scales = orbit of major under transposition -/
+def MajorScales : Set PitchClassSet := TransposeOrbit StandardScales.major
+
+end EnrichedGroupoid
