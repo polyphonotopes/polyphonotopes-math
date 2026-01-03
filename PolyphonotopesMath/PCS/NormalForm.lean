@@ -9,55 +9,42 @@ invariant under transposition. Used for identifying equivalent structures.
 Two PCS are transposition-equivalent if one can be obtained from the other
 by adding a constant mod 12. For example, C major and D major triads are
 equivalent - same shape, different root.
+
+## Algorithm: Minimal Bitset
+
+We use the minimal bitset rotation as the canonical form. This is:
+- Simpler and faster than interval sequence comparison
+- Produces a unique representative for each equivalence class
+- Compatible with the vibe-grammars Rust implementation
+
+For a PCS, we try all 12 rotations and pick the one with the smallest
+numerical value. The transposition is how many steps we rotated.
 -/
 
 namespace PCS
 
-/-- Interval sequence: gaps between adjacent pitch classes (including wraparound).
-    For a sorted PCS like [0, 3, 7], returns [3, 4, 5] (semitones between notes). -/
-def intervalSequence (pcs : List Nat) : List Nat :=
-  match pcs with
-  | [] => []
-  | [_] => [12]
-  | first :: rest =>
-    let pairs := pcs.zip (rest ++ [first + 12])
-    pairs.map (fun (a, b) => b - a)
-
-/-- Legacy alias for intervalSequence -/
-abbrev intervalVector := intervalSequence
-
-/-- Compare interval sequences lexicographically.
-    Returns true if seq1 < seq2 (first difference wins). -/
-def intervalSequenceLessThan (seq1 seq2 : List Nat) : Bool :=
-  match seq1, seq2 with
-  | [], [] => false
-  | [], _ => true
-  | _, [] => false
-  | a :: as, b :: bs =>
-    if a < b then true
-    else if a > b then false
-    else intervalSequenceLessThan as bs
-
-/-- Legacy alias for intervalSequenceLessThan -/
-abbrev ivLt := intervalSequenceLessThan
-
-/-- Compute normal form: the rotation with lexicographically smallest interval sequence.
-    This is the canonical representative under transposition equivalence. -/
-def normalForm (bits : Nat) : List Nat :=
-  let pcs := bitsToList bits
-  if pcs.isEmpty then []
+/-- Compute normal form as bits: the rotation with smallest numerical value.
+    Returns (normalized_bits, transposition) where transposition is how many
+    steps the original was rotated to reach the normalized form. -/
+def normalizeWithTransposition (bits : Nat) : Nat × Nat :=
+  if bits = 0 then (0, 0)
   else
-    let rotations := (List.range 12).map fun k =>
-      let rotated := pcs.map (fun pc => (pc + 12 - k) % 12) |>.mergeSort (· ≤ ·)
-      (rotated, intervalSequence rotated)
-    let sorted := rotations.mergeSort (fun (_, seq1) (_, seq2) => intervalSequenceLessThan seq1 seq2)
-    match sorted.head? with
-    | some (r, _) => r
-    | none => pcs
+    let rotations := (List.range 12).map fun k => (rotateBits bits k, k)
+    match rotations.foldl (fun (minBits, minK) (b, k) =>
+      if b < minBits then (b, k) else (minBits, minK)) (bits, 0) with
+    | (minBits, minK) => (minBits, minK)
 
-/-- Compute normal form as bits -/
+/-- Compute normal form as bits (minimal rotation) -/
 def normalFormBits (bits : Nat) : Nat :=
-  listToBits (normalForm bits)
+  (normalizeWithTransposition bits).1
+
+/-- Get the transposition amount to reach normal form -/
+def transpositionToNormal (bits : Nat) : Nat :=
+  (normalizeWithTransposition bits).2
+
+/-- Compute normal form as a list of pitch classes -/
+def normalForm (bits : Nat) : List Nat :=
+  bitsToList (normalFormBits bits)
 
 /-- Check if two PCS are transposition-equivalent -/
 def isTranspositionEquivalent (a b : Nat) : Bool :=
