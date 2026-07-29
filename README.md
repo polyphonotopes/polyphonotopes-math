@@ -1,1 +1,2 @@
 # polyphonotopes-math
+EXPERIMENTAL
